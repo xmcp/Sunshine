@@ -443,8 +443,6 @@ namespace platf {
     bool key_state_down = (key_state & KEY_STATE_DOWN) != 0;
     if (key_state_down != release) {
       BOOST_LOG(warning) << "Button state of mouse_button ["sv << button << "] does not match the desired state"sv;
-
-      return;
     }
 
     send_input(i);
