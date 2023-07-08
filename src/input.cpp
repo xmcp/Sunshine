@@ -322,7 +322,6 @@ namespace input {
       return;
     }
 
-    input->mouse_left_button_timeout = DISABLE_LEFT_BUTTON_DELAY;
     platf::move_mouse(platf_input, util::endian::big(packet->deltaX), util::endian::big(packet->deltaY));
   }
 
@@ -330,10 +329,6 @@ namespace input {
   passthrough(std::shared_ptr<input_t> &input, PNV_ABS_MOUSE_MOVE_PACKET packet) {
     if (!config::input.mouse) {
       return;
-    }
-
-    if (input->mouse_left_button_timeout == DISABLE_LEFT_BUTTON_DELAY) {
-      input->mouse_left_button_timeout = ENABLE_LEFT_BUTTON_DELAY;
     }
 
     auto &touch_port_event = input->touch_port_event;
@@ -392,48 +387,7 @@ namespace input {
 
       mouse_press[button] = !release;
     }
-    /**
-     * When Moonlight sends mouse input through absolute coordinates,
-     * it's possible that BUTTON_RIGHT is pressed down immediately after releasing BUTTON_LEFT.
-     * As a result, Sunshine will left-click on hyperlinks in the browser before right-clicking
-     *
-     * This can be solved by delaying BUTTON_LEFT, however, any delay on input is undesirable during gaming
-     * As a compromise, Sunshine will only put delays on BUTTON_LEFT when
-     * absolute mouse coordinates have been sent.
-     *
-     * Try to make sure BUTTON_RIGHT gets called before BUTTON_LEFT is released.
-     *
-     * input->mouse_left_button_timeout can only be nullptr
-     * when the last mouse coordinates were absolute
-     */
-    if (button == BUTTON_LEFT && release && !input->mouse_left_button_timeout) {
-      auto f = [=]() {
-        auto left_released = mouse_press[BUTTON_LEFT];
-        if (left_released) {
-          // Already released left button
-          return;
-        }
-        platf::button_mouse(platf_input, BUTTON_LEFT, release);
-
-        mouse_press[BUTTON_LEFT] = false;
-        input->mouse_left_button_timeout = nullptr;
-      };
-
-      input->mouse_left_button_timeout = task_pool.pushDelayed(std::move(f), 10ms).task_id;
-
-      return;
-    }
-    if (
-      button == BUTTON_RIGHT && !release &&
-      input->mouse_left_button_timeout > DISABLE_LEFT_BUTTON_DELAY) {
-      platf::button_mouse(platf_input, BUTTON_RIGHT, false);
-      platf::button_mouse(platf_input, BUTTON_RIGHT, true);
-
-      mouse_press[BUTTON_RIGHT] = false;
-
-      return;
-    }
-
+    
     platf::button_mouse(platf_input, button, release);
   }
 
@@ -1216,7 +1170,6 @@ namespace input {
   void
   reset(std::shared_ptr<input_t> &input) {
     task_pool.cancel(key_press_repeat_id);
-    task_pool.cancel(input->mouse_left_button_timeout);
 
     // Ensure input is synchronous, by using the task_pool
     task_pool.push([]() {
